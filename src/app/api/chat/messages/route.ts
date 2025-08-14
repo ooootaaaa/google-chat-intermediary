@@ -10,34 +10,53 @@ const supabase = createClient(
 export async function POST(request: Request) {
   try {
     const event = await request.json();
-    console.log('Received raw event:', JSON.stringify(event, null, 2));
-
-    // ★★★ 実際のデータ構造に合わせて判定ロジックを修正 ★★★
-    // event.chat.messagePayload.message のパスを安全にたどる
     const message = event.chat?.messagePayload?.message;
 
+    // メッセージイベントの場合のみ処理を実行
     if (message) {
-      // メッセージ情報が存在する場合
-      const messageText = message.text || '';
+      const messageText: string = message.text || '';
+      const senderEmail: string = message.sender?.email || '';
 
-      const { error } = await supabase
-        .from('notifications')
-        .insert({
+      // 1. Supabaseから全ての通知ルールを取得
+      const { data: rules, error: rulesError } = await supabase
+        .from('notification_rules')
+        .select('user_id, rule_type, rule_value');
+      
+      if (rulesError) throw rulesError;
+
+      // 2. このメッセージに合致するルールを持つユーザーIDを特定する
+      const usersToNotify = new Set<string>();
+      if (rules) {
+        for (const rule of rules) {
+          // ルールタイプが'sender'で、差出人メールアドレスが一致する場合
+          if (rule.rule_type === 'sender' && rule.rule_value === senderEmail) {
+            usersToNotify.add(rule.user_id);
+          }
+          // ルールタイプが'keyword'で、メッセージ本文にキーワードが含まれる場合
+          if (rule.rule_type === 'keyword' && messageText.includes(rule.rule_value)) {
+            usersToNotify.add(rule.user_id);
+          }
+        }
+      }
+      
+      // 3. 該当するユーザーがいれば、そのユーザー宛の通知をDBに書き込む
+      if (usersToNotify.size > 0) {
+        const newNotifications = Array.from(usersToNotify).map(userId => ({
           message: messageText,
-          user_id: 'test_user' // 今はテスト用に固定
-        });
+          user_id: userId,
+        }));
 
-      if (error) throw error;
-
-      console.log(`✅ Message event processed and saved to Supabase: "${messageText}"`);
-    } else {
-      // メッセージ情報が存在しない場合（スペースへの追加など）
-      console.log(`✅ Received an event without a message payload.`);
+        const { error: insertError } = await supabase
+          .from('notifications')
+          .insert(newNotifications);
+        
+        if (insertError) throw insertError;
+        
+        console.log(`✅ Notified ${usersToNotify.size} user(s).`);
+      }
     }
 
-    // Google Chatには必ず何らかの応答を返す
     return NextResponse.json({});
-
   } catch (error) {
     console.error('Error processing request:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
