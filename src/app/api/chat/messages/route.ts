@@ -1,26 +1,32 @@
 // file: app/api/chat/messages/route.ts
-
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+// Supabaseのクライアントを初期化
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!
+);
 
 export async function POST(request: Request) {
   try {
     const event = await request.json();
-    console.log('Received raw event:', JSON.stringify(event, null, 2));
+    const messageText = event.message.text || '';
 
-    // ★★★ ここから下を追加 ★★★
-    // eventオブジェクトの中から、メッセージのテキスト部分を抜き出す
-    // event.message.text には "@MyApp こんにちは" のような形でテキストが入っている
-    const messageText = event.message.text || ''; 
-    const senderName = event.user.displayName || 'Unknown User';
+    // ★★★ Supabaseのテーブルに通知データを書き込む ★★★
+    const { error } = await supabase
+      .from('notifications')
+      .insert({ 
+        message: messageText, 
+        user_id: 'test_user' // 今はテスト用に固定
+      });
 
-    // 抜き出した情報をログに出力して確認する
-    console.log(`✅ Parsed Info: [${senderName}] said "${messageText}"`);
-    // ★★★ ここまで追加 ★★★
+    if (error) throw error;
 
+    console.log(`✅ Notification saved to Supabase: "${messageText}"`);
     return NextResponse.json({});
-
   } catch (error) {
-    console.error('Error processing request:', error);
+    console.error('Error saving to Supabase:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
