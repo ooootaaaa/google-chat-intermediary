@@ -12,32 +12,30 @@ export async function POST(request: Request) {
     const event = await request.json();
     console.log('Received raw event:', JSON.stringify(event, null, 2));
 
-    // ★★★ イベントタイプによって処理を分岐させる ★★★
-    if (event.type === 'MESSAGE') {
-      // メッセージイベントの場合のみ、メッセージを処理する
-      const messageText = event.message?.text || ''; // ?.で安全にアクセス
-      
+    // ★★★ 実際のデータ構造に合わせて判定ロジックを修正 ★★★
+    // event.chat.messagePayload.message のパスを安全にたどる
+    const message = event.chat?.messagePayload?.message;
+
+    if (message) {
+      // メッセージ情報が存在する場合
+      const messageText = message.text || '';
+
       const { error } = await supabase
         .from('notifications')
-        .insert({ 
-          message: messageText, 
-          user_id: 'test_user'
+        .insert({
+          message: messageText,
+          user_id: 'test_user' // 今はテスト用に固定
         });
 
       if (error) throw error;
-      
-      console.log(`✅ MESSAGE event processed and saved to Supabase.`);
 
-    } else if (event.type === 'ADDED_TO_SPACE') {
-      // スペース追加イベントの場合
-      console.log(`✅ ADDED_TO_SPACE event received. No message to process.`);
-      // ここで「追加ありがとうございます！」のようなウェルカムメッセージを返す処理を実装することも可能
+      console.log(`✅ Message event processed and saved to Supabase: "${messageText}"`);
     } else {
-      // その他のイベントタイプ
-      console.log(`✅ Received unhandled event type: ${event.type}`);
+      // メッセージ情報が存在しない場合（スペースへの追加など）
+      console.log(`✅ Received an event without a message payload.`);
     }
 
-    // Google Chatには必ず何らかの応答を返す（空のJSONでもOK）
+    // Google Chatには必ず何らかの応答を返す
     return NextResponse.json({});
 
   } catch (error) {
