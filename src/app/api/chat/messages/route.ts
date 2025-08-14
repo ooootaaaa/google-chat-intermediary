@@ -2,22 +2,25 @@
 
 import { NextResponse } from 'next/server';
 
-// Google ChatからのPOSTリクエストを処理する関数
 export async function POST(request: Request) {
   try {
-    // 送られてきたリクエストの本体（body）をJSONとして解析
     const event = await request.json();
+    console.log('Received raw event:', JSON.stringify(event, null, 2));
 
-    // デバッグ用に、受け取った内容をコンソールログに出力
-    console.log('Received from Google Chat:', JSON.stringify(event, null, 2));
+    // ★★★ ここから下を追加 ★★★
+    // eventオブジェクトの中から、メッセージのテキスト部分を抜き出す
+    // event.message.text には "@MyApp こんにちは" のような形でテキストが入っている
+    const messageText = event.message.text || ''; 
+    const senderName = event.user.displayName || 'Unknown User';
 
-    // とりあえずGoogleに「受け取りました」という空の応答を返す
-    // 将来的にはここでメッセージカードなどを返すこともできる
+    // 抜き出した情報をログに出力して確認する
+    console.log(`✅ Parsed Info: [${senderName}] said "${messageText}"`);
+    // ★★★ ここまで追加 ★★★
+
     return NextResponse.json({});
 
   } catch (error) {
     console.error('Error processing request:', error);
-    // エラーが発生した場合はサーバーエラーを返す
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
